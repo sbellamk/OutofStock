@@ -1,0 +1,3 @@
+Flask==1.1.1
+PyMySQL==0.9.3
+Flask-MySQL==1.5.1

@@ -8,16 +8,14 @@ __ip = "35.223.105.218"
 __username = "basicUser"
 __password = "password"
 __dbname = "out_of_stock"
+__unix_socket = "/cloudsql/pro-kayak-230507:us-central1:out-of-stock"
 
 app = flask.Flask(__name__)
 app.config["DEBUG"] = True
-app.config['MYSQL_HOST'] = __ip
 app.config['MYSQL_USER'] = __username
 app.config['MYSQL_PASSWORD'] = __password
 app.config['MYSQL_DB'] = __dbname
-
-mysql = MySQL()
-mysql.init_app(app)
+app.config['MYSQL_UNIX_SOCKET'] = __unix_socket
 
 
 
@@ -47,7 +45,7 @@ def getallStoresinarea():
         return "Error: No id field provided. Please specify an longmax."
     #127.0.0.1:5000/api/v1/stores?latmin=[LATITUDEMIN]&latmax=[LATITUDEMAX]&longmin=[LONGITUDEMIN]&longmax=[LONGITUDEMAX]
     # Open database connection
-    db = pymysql.connect(__ip,__username,__password,__dbname)
+    db = getdb()
     # prepare a cursor object using cursor() method
     cur = db.cursor()
     params = "SELECT * FROM stores WHERE latitude >= {} AND latitude <= {} AND \
@@ -77,105 +75,185 @@ def getallItems():
         return "Error: No id field provided. Please specify an storeid."
     #127.0.0.1:5000/api/v1/items/all?storeid=[STORE_ID]
     # Open database connection
-    db = pymysql.connect(__ip,__username,__password,__dbname)
+    db = getdb()
     # prepare a cursor object using cursor() method
     cur = db.cursor()
-    params = "SELECT * FROM outOfStock WHERE store_id = (%s)"
+    params = "SELECT * FROM availability WHERE store_id = (%s)"
     cur.execute(params, storeid)
     rv = cur.fetchall()
-    itemids = []
+    payload = []
+    content = {}
     for result in rv:
-       content = int(result[1])
-       itemids.append(content)
-    #Create a new cursor for selecing items of certain ID
-    payload2 = []
-    content2 = {}
-    cur2 = db.cursor()
-    for each in itemids:
-        params = "SELECT * FROM items WHERE itemID = %s"
-        cur2.execute(params, each)
-        rv2 = cur2.fetchall()
-        for result in rv2:
-           content2 = {'itemID': str(result[0]),
-                    'itemName': str(result[1])}
-           payload2.append(content2)
-           content2 = {}
-    return jsonify(payload2)
+        availability = str(result[2])
+        if availability == "1":
+            availabilty = True
+        else:
+            availability = False
+        content = {'item_name': str(result[1]),
+                 'available': availabilty}
+        payload.append(content)
+        content = {}
+    return jsonify(payload)
 
 
 
-@app.route('/api/v1/items/add', methods=['POST'])
+@app.route('/api/v1/availabilityitems/all', methods=['GET'])
+def getallavailabilityitems():
+    if 'storeid' in request.args:
+        storeid = (request.args['storeid'])
+    else:
+        return "Error: No id field provided. Please specify an storeid."
+    if 'available' in request.args:
+        available = (request.args['available'])
+    else:
+        return "Error: No id field provided. Please specify an available."
+    #127.0.0.1:5000/api/v1/availabilityitems/all?storeid=[STORE_ID]&available=[AVAILABLEBOOLEAN]
+    # Open database connection
+    db = getdb()
+    # prepare a cursor object using cursor() method
+    cur = db.cursor()
+    params = "SELECT * FROM availability WHERE store_id = (%s) AND available = (%s)"
+    if available == "true":
+        available = 1
+    else:
+        available = 0
+    cur.execute(params, (storeid,available))
+    rv = cur.fetchall()
+    payload = []
+    content = {}
+    for result in rv:
+        availability = str(result[2])
+        if availability == "1":
+            availabilty = True
+        else:
+            availability = False
+        content = {'item_name': str(result[1]),
+                 'available': availabilty}
+        payload.append(content)
+        content = {}
+    return jsonify(payload)
+
+
+
+
+@app.route('/api/v1/items/add', methods=['POST', 'GET'])
 def postaddItem():
     if 'itemname' in request.args:
         itemname = (request.args['itemname'])
     else:
         return "Error: No id field provided. Please specify an itemname."
-    if 'itemid' in request.args:
-        itemid = (request.args['itemid'])
-    else:
-        return "Error: No id field provided. Please specify an itemid."
     if 'storeid' in request.args:
         storeid = (request.args['storeid'])
     else:
         return "Error: No id field provided. Please specify an storeid."
+    if 'available' in request.args:
+        available = (request.args['available'])
+    else:
+        return "Error: No id field provided. Please specify an available."
 
-    #127.0.0.1:5000/api/v1/items/add?itemid=[itemid]&storeid=[STORE_ID]&itemname=[ITEM_NAME]
+    #127.0.0.1:5000/api/v1/items/add?itemid=[itemid]&storeid=[STORE_ID]&available=[AVAILABLEBOOLEAN]
     # Open database connection
-    db = pymysql.connect(__ip,__username,__password,__dbname)
+    db = getdb()
     # prepare a cursor object using cursor() method
+    if available == "true":
+        available = 1
+    else:
+        available = 0
+    z = 0
+    try:
+        curcheck = db.cursor()
+        paramscheck = "SELECT * FROM `availability` WHERE store_ID = (%s) \
+                        AND item_name = (%s)"
 
-    try:
-        cur = db.cursor()
-        params = "INSERT INTO `items` (itemid,itemName) VALUES (%s, %s)"
-        cur.execute(params, (itemid, itemname))
-    except:
-        pass
-    try:
-        cur2 = db.cursor()
-        params = "INSERT INTO `outOfStock` (store_id, item_id) VALUES (%s, %s)"
-        cur2.execute(params, (storeid, itemid))
-        #check for duplicates, and add to item list
+        curcheck.execute(paramscheck, (storeid, itemname))
+        z = curcheck.rowcount
+        if  z>0:
+            cur2 = db.cursor()
+            params = "UPDATE `availability` SET available = (%s) WHERE \
+                        store_ID = (%s) AND item_name = (%s)"
+            cur2.execute(params, (unavailable, storeid,itemname))
+        else:
+            cur2 = db.cursor()
+            params = "INSERT INTO `availability` (store_id, item_name, available) VALUES (%s, %s,%s)"
+            cur2.execute(params, (storeid, itemname, available))
+    #check for duplicates, and add to item list
     except:
         pass
     db.commit()
-
     return "completed"
 
 
-@app.route('/api/v1/items/remove', methods=['POST'])
+@app.route('/api/v1/items/remove', methods=['POST', 'GET'])
 def postremoveItem():
+
     if 'itemname' in request.args:
         itemname = (request.args['itemname'])
     else:
         return "Error: No id field provided. Please specify an itemname."
-    if 'itemid' in request.args:
-        itemid = (request.args['itemid'])
+        if 'storeid' in request.args:
+            storeid = (request.args['storeid'])
+        else:
+            return "Error: No id field provided. Please specify an storeid."
+
+        #127.0.0.1:5000/api/v1/items/remove?itemname=[ITEM_NAME]&storeid=[STORE_ID]
+        # Open database connection
+        db = getdb()
+        # prepare a cursor object using cursor() method
+        cur = db.cursor()
+        params = "DELETE FROM `availability` WHERE item_name = %s AND store_id = %s"
+        cur.execute(params,(itemname,storeid))
+        db.commit()
+        return "completed"
+
+@app.route('/api/v1/store/add', methods=['POST', 'GET'])
+def addstore():
+    if 'storename' in request.args:
+        storename = (request.args['storename'])
     else:
-        return "Error: No id field provided. Please specify an itemid."
+        return "Error: No id field provided. Please specify a storename."
     if 'storeid' in request.args:
         storeid = (request.args['storeid'])
     else:
-        return "Error: No id field provided. Please specify an storeid."
+        return "Error: No id field provided. Please specify a storeid."
+    if 'address' in request.args:
+        address = (request.args['address'])
+    else:
+        return "Error: No id field provided. Please specify a address."
+    if 'latitude' in request.args:
+        latitude = (request.args['latitude'])
+    else:
+        return "Error: No id field provided. Please specify a latitude."
+    if 'longitude' in request.args:
+        longitude = (request.args['longitude'])
+    else:
+        return "Error: No id field provided. Please specify a longitude."
 
-    #127.0.0.1:5000/api/v1/items/remove?itemname=[ITEM_NAME]&storeid=[STORE_ID]&itemid=[ITEM_ID]
+    db = getdb()
+
+    #127.0.0.1:5000/api/v1/store/add?storename=[ITEM_NAME]&storeid=[STORE_ID]&address=[ADDRESS]&latitude=[LATITUDE]&longitude=[LONGITUDE]
     # Open database connection
-    db = pymysql.connect(__ip,__username,__password,__dbname)
-    # prepare a cursor object using cursor() method
-    cur = db.cursor()
-    params = "DELETE FROM `outOfStock` WHERE item_id = %s AND store_id = %s"
-    cur.execute(params,(itemid,storeid))
+    try:
+        cur = db.cursor()
+        params = "INSERT INTO `stores` (storeID, storeName, addr, latitude, longitude, occupancy) \
+            VALUES (%s,%s,%s,%s,%s,0)"
+
+        cur.execute(params, (storeid, storename, address, latitude, longitude))
+
+    #check for duplicates, and add to item list
+    except:
+        pass
     db.commit()
     return "completed"
 
-@app.route('/api/v1/person/add', methods=['POST'])
+@app.route('/api/v1/person/add', methods=['POST', 'GET'])
 def postaddperson():
     if 'storeid' in request.args:
         storeid = (request.args['storeid'])
     else:
         return "Error: No id field provided. Please specify a storeid."
-    #127.0.0.1:5000/api/v1/person/add?storename=[STORE_ID]
+    #127.0.0.1:5000/api/v1/person/add?storeid=[STORE_ID]
     # Open database connection
-    db = pymysql.connect(__ip,__username,__password,__dbname)
+    db = getdb()
     # prepare a cursor object using cursor() method
     cur = db.cursor()
     params = "UPDATE `stores` SET occupancy = occupancy+1 WHERE storeid = (%s)"
@@ -183,7 +261,7 @@ def postaddperson():
     db.commit()
     return "completed"
 
-@app.route('/api/v1/person/remove', methods=['POST'])
+@app.route('/api/v1/person/remove', methods=['POST', 'GET'])
 def postremoveperson():
     if 'storeid' in request.args:
         storeid = (request.args['storeid'])
@@ -191,14 +269,17 @@ def postremoveperson():
         return "Error: No id field provided. Please specify a storeid."
     #127.0.0.1:5000/api/v1/person/remove?storename=[STORE_ID]
     # Open database connection
-    db = pymysql.connect(__ip,__username,__password,__dbname)
+    db = getdb()
     # prepare a cursor object using cursor() method
     cur = db.cursor()
     params = "UPDATE `stores` SET occupancy = occupancy-1 WHERE storeid = (%s)"
     cur.execute(params, storeid)
     db.commit()
     return "completed"
+	
+def getdb():
+	return pymysql.connect(user=__username, passwd=__password,db=__dbname,unix_socket=__unix_socket)
 
 
 if __name__ == '__main__':
-    app.run(debug=True, host='127.0.0.1')
+    app.run(debug=True)

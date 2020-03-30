@@ -86,11 +86,11 @@ def getallItems():
     for result in rv:
         availability = str(result[2])
         if availability == "1":
-            availabilty = True
+            availability = True
         else:
             availability = False
         content = {'item_name': str(result[1]),
-                 'available': availabilty}
+                 'available': availability}
         payload.append(content)
         content = {}
     return jsonify(payload)
@@ -124,11 +124,11 @@ def getallavailabilityitems():
     for result in rv:
         availability = str(result[2])
         if availability == "1":
-            availabilty = True
+            availability = True
         else:
             availability = False
         content = {'item_name': str(result[1]),
-                 'available': availabilty}
+                 'available': availability}
         payload.append(content)
         content = {}
     return jsonify(payload)
@@ -171,7 +171,7 @@ def postaddItem():
             cur2 = db.cursor()
             params = "UPDATE `availability` SET available = (%s) WHERE \
                         store_ID = (%s) AND item_name = (%s)"
-            cur2.execute(params, (unavailable, storeid,itemname))
+            cur2.execute(params, (available, storeid,itemname))
         else:
             cur2 = db.cursor()
             params = "INSERT INTO `availability` (store_id, item_name, available) VALUES (%s, %s,%s)"
@@ -276,7 +276,7 @@ def postremoveperson():
     cur.execute(params, storeid)
     db.commit()
     return "completed"
-	
+
 def getdb():
 	return pymysql.connect(user=__username, passwd=__password,db=__dbname,unix_socket=__unix_socket)
 

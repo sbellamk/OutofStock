@@ -190,20 +190,21 @@ def postremoveItem():
         itemname = (request.args['itemname'])
     else:
         return "Error: No id field provided. Please specify an itemname."
-        if 'storeid' in request.args:
-            storeid = (request.args['storeid'])
-        else:
-            return "Error: No id field provided. Please specify an storeid."
+        
+    if 'storeid' in request.args:
+        storeid = (request.args['storeid'])
+    else:
+        return "Error: No id field provided. Please specify an storeid."
 
-        #127.0.0.1:5000/api/v1/items/remove?itemname=[ITEM_NAME]&storeid=[STORE_ID]
-        # Open database connection
-        db = getdb()
-        # prepare a cursor object using cursor() method
-        cur = db.cursor()
-        params = "DELETE FROM `availability` WHERE item_name = %s AND store_id = %s"
-        cur.execute(params,(itemname,storeid))
-        db.commit()
-        return "completed"
+    #127.0.0.1:5000/api/v1/items/remove?itemname=[ITEM_NAME]&storeid=[STORE_ID]
+    # Open database connection
+    db = getdb()
+    # prepare a cursor object using cursor() method
+    cur = db.cursor()
+    params = "DELETE FROM `availability` WHERE item_name = %s AND store_ID = %s"
+    cur.execute(params,(itemname,storeid))
+    db.commit()
+    return "completed"
 
 @app.route('/api/v1/store/add', methods=['POST', 'GET'])
 def addstore():
